@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	prompt "github.com/c-bata/go-prompt"
 )
+
+var p *prompt.Prompt
 
 var LivePrefixState struct {
 	LivePrefix string
@@ -12,11 +15,22 @@ var LivePrefixState struct {
 }
 
 func executor(in string) {
-	fmt.Println("Your input: " + in)
+	if p.WasCanceled() {
+		fmt.Println("(canceled)")
+	} else {
+		fmt.Println("Your input: " + in)
+	}
 	if in == "" {
 		LivePrefixState.IsEnable = false
 		LivePrefixState.LivePrefix = in
 		return
+	}
+	if in == "pw" {
+		p.Obscure(true)
+		in = "((password))"
+	}
+	if in == "exit" {
+		os.Exit(0)
 	}
 	LivePrefixState.LivePrefix = in + "> "
 	LivePrefixState.IsEnable = true
@@ -28,6 +42,8 @@ func completer(in prompt.Document) []prompt.Suggest {
 		{Text: "articles", Description: "Store the article text posted by user"},
 		{Text: "comments", Description: "Store the text commented to articles"},
 		{Text: "groups", Description: "Combine users with specific rules"},
+		{Text: "pw", Description: "Super-secret password entry"},
+		{Text: "exit", Description: "Does what it says"},
 	}
 	return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
 }
@@ -37,7 +53,7 @@ func changeLivePrefix() (string, bool) {
 }
 
 func main() {
-	p := prompt.New(
+	p = prompt.New(
 		executor,
 		completer,
 		prompt.OptionPrefix(">>> "),

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -40,6 +41,8 @@ type Prompt struct {
 	skipTearDown      bool
 	histSearch        bool
 	histSearchFwd     bool
+	obscured          bool
+	canceled          bool
 }
 
 // Exec is the struct contains user input context.
@@ -47,12 +50,20 @@ type Exec struct {
 	input string
 }
 
+// hidden entry for things like passwords
+func (p *Prompt) Obscure(on bool) {
+	p.freshBuffer(false, on)
+}
+func (p *Prompt) WasCanceled() bool {
+	return p.canceled
+}
+
 // Run starts prompt.
 func (p *Prompt) Run() {
 	p.skipTearDown = false
 	defer debug.Teardown()
 	debug.Log("start prompt")
-	p.freshBuffer(false)
+	p.freshBuffer(false, p.obscured)
 	p.setUp()
 	defer p.tearDown()
 
@@ -122,14 +133,24 @@ func (p *Prompt) SetHistory(hist *History) {
 	p.history = hist
 }
 
-func (p *Prompt) freshBuffer(split bool) {
+func (p *Prompt) freshBuffer(split bool, obscured bool) {
 	p.buf = NewBuffer()
 	p.histSearch = split
+	p.obscured = obscured
 	p.completion.Enable(!split)
 	if split {
 		p.editBuf = NewBuffer()
 	} else {
 		p.editBuf = p.buf
+	}
+}
+
+func (p *Prompt) updateObscuredText() {
+	if p.obscured {
+		editText := p.editBuf.Text()
+		obscureText := strings.Repeat("*", len(editText))
+		p.buf = NewBuffer()
+		p.buf.InsertText(obscureText, false, true)
 	}
 }
 
@@ -157,31 +178,43 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 	key := GetKey(b)
 	p.editBuf.lastKeyStroke = key
 	// completion
-	completing := p.completion.Completing() && !p.histSearch
+	completing := p.completion.Completing() && !p.histSearch && !p.obscured
 	p.handleCompletionKeyBinding(key, completing)
 
 	switch key {
 	case Enter, ControlJ, ControlM:
-		if  p.histSearch {
+		if p.histSearch {
 			p.updateHistSearch(true)
 		}
 		p.renderer.BreakLine(p.buf)
 
 		exec = &Exec{input: p.buf.Text()}
-		p.freshBuffer(false)
-		if exec.input != "" {
+		p.canceled = false
+		if p.obscured {
+			exec.input = p.editBuf.Text()
+		}
+		if exec.input != "" && !p.obscured {
 			p.history.Add(exec.input)
 		}
+		// NOTE: this clears obscured...
+		p.freshBuffer(false, false)
 	case ControlC:
+		if p.obscured {
+			exec = &Exec{input: ""}
+			p.canceled = true
+		}
 		p.histSearch = false
 		p.renderer.BreakLine(p.buf)
-		p.freshBuffer(false)
+		// NOTE: this clears obscured...
+		p.freshBuffer(false, false)
 		p.history.Clear()
 		p.histSearch = false
 	case Up, ControlP:
-		if p.histSearch {
+		if p.obscured {
+			// do nothing
+		} else if p.histSearch {
 			p.histSearch = false
-			p.freshBuffer(false)
+			p.freshBuffer(false, false)
 		} else if !completing { // Don't use p.completion.Completing() because it takes double operation when switch to selected=-1.
 			if newBuf, changed := p.history.Older(p.editBuf); changed {
 				p.buf = newBuf
@@ -189,9 +222,11 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 			}
 		}
 	case Down, ControlN:
-		if p.histSearch {
+		if p.obscured {
+			// do nothing
+		} else if p.histSearch {
 			p.histSearch = false
-			p.freshBuffer(false)
+			p.freshBuffer(false, false)
 		} else if !completing { // Don't use p.completion.Completing() because it takes double operation when switch to selected=-1.
 			if newBuf, changed := p.history.Newer(p.editBuf); changed {
 				p.buf = newBuf
@@ -200,7 +235,9 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 			return
 		}
 	case Left, Right:
-		if p.histSearch {
+		if p.obscured {
+			return
+		} else if p.histSearch {
 			p.updateHistSearch(true)
 			p.editBuf = p.buf
 			p.histSearch = false
@@ -211,6 +248,9 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 			p.renderer.Render(p.buf, p.completion)
 		}
 	case ControlR:
+		if p.obscured {
+			return
+		}
 		p.histSearchFwd = false
 		if p.histSearch {
 			p.history.Search(p.editBuf.Text(), p.histSearchFwd, true)
@@ -225,6 +265,9 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		}
 		return
 	case ControlS:
+		if p.obscured {
+			return
+		}
 		p.histSearchFwd = true
 		if p.histSearch {
 			p.history.Search(p.editBuf.Text(), p.histSearchFwd, true)
@@ -232,9 +275,12 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 			return
 		}
 	case Escape:
-		if p.histSearch {
+		if p.obscured {
+			exec = &Exec{input: ""}
+			p.canceled = true
+		} else if p.histSearch {
 			p.histSearch = false
-			p.freshBuffer(false)
+			p.freshBuffer(false, false)
 			return
 		}
 	case ControlD:
@@ -252,12 +298,15 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 			p.editBuf.InsertText(string(b), false, true)
 		} else {
 			p.histSearch = false
-			p.buf = p.editBuf
+			if !p.obscured {
+				p.buf = p.editBuf
+			}
 		}
 	}
 
 	shouldExit = p.handleKeyBinding(key)
 	p.updateHistSearch(false)
+	p.updateObscuredText()
 	return
 }
 

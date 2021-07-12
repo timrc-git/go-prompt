@@ -1,8 +1,12 @@
 # Change Log
 
-## v0.3.0 (2018/??/??)
+## v0.3.1 (2021/07/12)
 
-next release.
+* Add Obscure() option for sensitive text entry (e.g. passwords).
+
+## v0.3.0 (2021/03/09)
+
+* Add reverse and forward history search.
 
 ## v0.2.3 (2018/10/25)
 

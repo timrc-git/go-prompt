@@ -88,6 +88,8 @@ Key Binding          | Description
 <kbd>Ctrl + K</kbd>  | Cut the line after the cursor to the clipboard
 <kbd>Ctrl + U</kbd>  | Cut the line before the cursor to the clipboard
 <kbd>Ctrl + L</kbd>  | Clear the screen
+<kbd>Ctrl + R</kbd>  | Reverse history search
+<kbd>Ctrl + S</kbd>  | Forward history search
 
 ### History
 

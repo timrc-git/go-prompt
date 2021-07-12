@@ -45,7 +45,7 @@ func (h *History) Search(pattern string, fwd bool, skipCur bool) string {
 			h.searchAt = 0
 		}
 		if h.searchAt >= hlen && !fwd {
-			h.searchAt = hlen -1
+			h.searchAt = hlen - 1
 		}
 	}
 	if h.searchAt < 0 || h.searchAt >= hlen {
