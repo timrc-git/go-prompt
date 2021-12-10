@@ -3,7 +3,7 @@ package prompt
 import (
 	"runtime"
 
-	"github.com/c-bata/go-prompt/internal/debug"
+	"github.com/timrc-git/go-prompt/internal/debug"
 	runewidth "github.com/mattn/go-runewidth"
 )
 
@@ -112,8 +112,19 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
 	x, _ := r.toPos(cursor)
-	if x+width >= int(r.col) {
-		cursor = r.backward(cursor, x+width-int(r.col))
+	if runtime.GOOS == "windows" {
+		if x+width >= int(r.col) {
+			// Correct for the incomplete implementation of ScrollUp()/ScrollDown():
+			r.out.CursorForward(x)
+			if x+width >= int(r.col) {
+				// Note: need a 1-character margin, or windows terminal wraps and breaks things.
+				cursor = r.backward(cursor, x+width-int(r.col)+1)
+			}
+		}
+	} else {
+		if x+width >= int(r.col) {
+			cursor = r.backward(cursor, x+width-int(r.col))
+		}
 	}
 
 	contentHeight := len(completions.tmp)
@@ -159,7 +170,11 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	}
 
 	if x+width >= int(r.col) {
-		r.out.CursorForward(x + width - int(r.col))
+		if runtime.GOOS == "windows" {
+			r.out.CursorForward(x + width - int(r.col) + 1)
+		} else {
+			r.out.CursorForward(x + width - int(r.col))
+		}
 	}
 
 	r.out.CursorUp(windowHeight)
@@ -270,7 +285,8 @@ func (r *Render) toPos(cursor int) (x, y int) {
 }
 
 func (r *Render) lineWrap(cursor int) {
-	if runtime.GOOS != "windows" && cursor > 0 && cursor%int(r.col) == 0 {
+	//if runtime.GOOS != "windows" && cursor > 0 && cursor%int(r.col) == 0 { }
+	if cursor > 0 && cursor%int(r.col) == 0 {
 		r.out.WriteRaw([]byte{'\n'})
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	prompt "github.com/c-bata/go-prompt"
+	prompt "github.com/timrc-git/go-prompt"
 )
 
 var p *prompt.Prompt

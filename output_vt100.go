@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"bytes"
+	"runtime"
 	"strconv"
 )
 
@@ -166,12 +167,38 @@ func (w *VT100Writer) UnSaveCursor() {
 
 // ScrollDown scrolls display down one line.
 func (w *VT100Writer) ScrollDown() {
-	w.WriteRaw([]byte{0x1b, 'D'})
+	if runtime.GOOS == "windows" {
+		// According to:
+		//   https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences#viewport-positioning
+		// Also see:
+		//   https://en.wikipedia.org/wiki/ANSI_escape_code
+		//   https://www.ecma-international.org/wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf
+		// We should be able to:
+		//    w.WriteRaw([]byte{0x1b, '[', '1', 'S'})
+		// and ScrollUp() with:
+		//    w.WriteRaw([]byte{0x1b, '[', '1', 'T'})
+		// but in practice, it doesn't seem to work.
+		// Scrolling with cursor up/down:
+		//   w.WriteRaw([]byte{0x1b, '[', '1', 'A'})
+		//   w.WriteRaw([]byte{0x1b, '[', '1', 'B'})
+		// also doesn't work.
+		// But, because this is just used to reserve space for completions, we can cheat:
+		w.WriteRaw([]byte{0x0a})
+		// but note that this loses the horizontal cursor/draw posision.
+	} else {
+		w.WriteRaw([]byte{0x1b, 'D'})
+	}
 }
 
 // ScrollUp scroll display up one line.
 func (w *VT100Writer) ScrollUp() {
-	w.WriteRaw([]byte{0x1b, 'M'})
+	if runtime.GOOS == "windows" {
+		// See ScrollDown for other things that don't work.
+		// NOTE: This works for Render.PrepareArea() but may not be suitable for all purposes.
+		w.WriteRaw([]byte{0x1b, 'M'})
+	} else {
+		w.WriteRaw([]byte{0x1b, 'M'})
+	}
 }
 
 /* Title */

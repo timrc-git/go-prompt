@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/c-bata/go-prompt/internal/debug"
+	"github.com/timrc-git/go-prompt/internal/debug"
 )
 
 // Executor is called when user input something text.
