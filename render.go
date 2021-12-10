@@ -113,13 +113,11 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
 	x, _ := r.toPos(cursor)
 	if runtime.GOOS == "windows" {
+		// Correct for the incomplete implementation of ScrollUp()/ScrollDown():
+		r.out.CursorForward(x)
 		if x+width >= int(r.col) {
-			// Correct for the incomplete implementation of ScrollUp()/ScrollDown():
-			r.out.CursorForward(x)
-			if x+width >= int(r.col) {
-				// Note: need a 1-character margin, or windows terminal wraps and breaks things.
-				cursor = r.backward(cursor, x+width-int(r.col)+1)
-			}
+			// Note: need a 1-character margin, or windows terminal wraps and breaks things.
+			cursor = r.backward(cursor, x+width-int(r.col)+1)
 		}
 	} else {
 		if x+width >= int(r.col) {
